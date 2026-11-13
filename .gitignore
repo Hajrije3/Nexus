@@ -43,3 +43,6 @@ next-env.d.ts
 # testing artifacts
 /test-results/
 /playwright-report/
+
+# self-hosted Monaco (copied from node_modules by scripts/copy-monaco.mjs)
+/public/monaco/

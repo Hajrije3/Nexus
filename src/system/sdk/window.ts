@@ -14,11 +14,20 @@ import type { InstanceId } from "@/system/runtime/types";
 export interface WindowContextValue {
   windowId: WindowId;
   instanceId: InstanceId;
+  appId: string;
+  /**
+   * Element covering the window's content area. Dialogs and popovers portal
+   * here so they are scoped to their window (they move, minimise and stack
+   * with it) instead of blocking the whole desktop.
+   */
+  portalContainer: HTMLElement | null;
 }
 
 export const WindowContext = createContext<WindowContextValue | null>(null);
 
-export interface WindowHandle extends WindowContextValue {
+export interface WindowHandle {
+  windowId: WindowId;
+  instanceId: InstanceId;
   isFocused: boolean;
   setTitle(title: string): void;
   close(): void;
@@ -41,4 +50,9 @@ export function useWindow(): WindowHandle {
     minimize: () => windowManager.getState().minimize(windowId),
     toggleMaximize: () => windowManager.getState().toggleMaximize(windowId),
   };
+}
+
+/** Portal target for window-scoped overlays (null outside a window or before mount). */
+export function useWindowPortal(): HTMLElement | null {
+  return useContext(WindowContext)?.portalContainer ?? null;
 }

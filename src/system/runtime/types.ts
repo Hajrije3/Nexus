@@ -54,6 +54,16 @@ export interface AppComponentProps {
 
 export type AppComponent = ComponentType<AppComponentProps>;
 
+/** Declares that an app can open certain files. */
+export interface FileHandler {
+  /** Lower-case extensions including the dot (".md"), or "*" for any. */
+  extensions: readonly string[] | "*";
+  /** Only offer this handler for text content. */
+  textOnly?: boolean;
+  /** Higher wins when choosing the default app for a file. */
+  priority: number;
+}
+
 export interface AppManifest {
   /** Reverse-DNS identifier, e.g. `nexus.calculator`. */
   id: AppId;
@@ -65,6 +75,8 @@ export interface AppManifest {
   window: WindowDefaults;
   /** Re-launching focuses the existing instance instead of spawning another. */
   singleInstance: boolean;
+  /** File types this app can open (see `openPath`). */
+  fileHandlers?: readonly FileHandler[];
   /** Lazy entry point; becomes its own code-split chunk. */
   load: () => Promise<{ default: AppComponent }>;
 }

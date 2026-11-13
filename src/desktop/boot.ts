@@ -5,7 +5,7 @@
  *  2. Measure the work area (session restore needs real geometry).
  *  3. Open storage (IndexedDB, or in-memory fallback).
  *  4. Mount the filesystem and ensure the standard layout exists.
- *  5. Install services and event bridges.
+ *  5. Load settings and apply the appearance; install services and bridges.
  *  6. Restore the previous workspace session, or show Welcome on first boot.
  *  7. Start autosaving the session.
  */
@@ -22,7 +22,9 @@ import { seedFileSystem } from "@/system/fs/seed";
 import { installServices } from "@/system/services";
 import { parseSession, restoreSession, SESSION_KEY } from "@/system/workspace/session";
 import { startSessionPersistence } from "@/system/workspace/persistence";
+import { startSettingsPersistence } from "@/system/settings/settings";
 import { builtinApps } from "@/applications";
+import { applyCurrentAppearance } from "./appearance";
 import { measureWorkArea } from "./work-area";
 
 export interface BootResult {
@@ -53,6 +55,10 @@ async function runBoot(): Promise<BootResult> {
   const kv = createKeyValueStore(storage.db);
   const fs = new VirtualFileSystem(storage.db, { events: systemEvents });
   await seedFileSystem(fs, kv);
+
+  // Settings load before the desktop paints, so the theme never flashes.
+  await startSettingsPersistence(kv);
+  applyCurrentAppearance();
 
   installServices({ storage, kv, fs });
   if (!storage.persistent) {

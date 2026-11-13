@@ -12,7 +12,8 @@ moves.
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Applications            src/applications/*                            │
-│   Welcome · Activity Monitor · Calculator · (Files, Terminal, …)      │
+│   Files · Terminal · Code Studio · Notes · Settings · Activity        │
+│   Monitor · Calculator · Welcome                                      │
 │   Talk to the system only through the App SDK (hooks + services).    │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Desktop Environment     src/desktop/*                                 │
@@ -22,7 +23,8 @@ moves.
 ├──────────────────────────────────────────────────────────────────────┤
 │ System Services         src/system/*                                  │
 │   window-manager · runtime (registry + processes) · events · storage  │
-│   fs · workspace · sdk · settings (P3) · permissions (P4)             │
+│   fs · documents · clipboard · settings · workspace · sdk ·           │
+│   permissions (P4)                                                    │
 │   Framework-agnostic TypeScript. No React imports in core logic.      │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Platform                                                              │
@@ -33,8 +35,8 @@ moves.
 **Dependency rule:** arrows only point down. Applications may import from
 the App SDK (`system/sdk/*`) and `ui/*`; they never import from `desktop/*` or from
 another application. System services never import from `desktop/*` or
-`applications/*`. This is enforced by convention now and will be enforced with
-an ESLint `no-restricted-imports` rule once more applications exist.
+`applications/*`. **Enforced by ESLint** (`no-restricted-imports` in
+`eslint.config.mjs`): a violating import fails `npm run lint`.
 
 ## 2. Folder structure
 
@@ -68,12 +70,16 @@ src/
 │   │   ├── errors.ts         FsError with ENOENT/EEXIST/… codes
 │   │   ├── mime.ts           Extension → MIME type
 │   │   ├── vfs.ts            VirtualFileSystem service
+│   │   ├── names.ts          Unique names ("x copy 2.md"), name validation
+│   │   ├── kinds.ts          File kinds and labels (folder, image, code…)
 │   │   └── seed.ts           Standard layout + one-time starter files
+│   ├── settings/             Theme, accent, wallpaper, motion (+ persistence)
+│   ├── documents.ts          TextDocumentSession — editor file model (ADR-0005)
+│   ├── clipboard.ts          System file clipboard + paste logic
 │   ├── workspace/
 │   │   ├── session.ts        Capture / validate / restore session snapshots
 │   │   └── persistence.ts    Debounced autosave
-│   ├── sdk/                  App SDK: useWindow, useFileSystem, useDirectory,
-│   │                         useSystemEvent, useRecentEvents
+│   ├── sdk/                  App SDK (see §6.6)
 │   ├── services.ts           Booted-service registry + system status store
 │   └── testing/              Test helpers (in-memory database)
 ├── desktop/                  Desktop environment (React)
@@ -86,15 +92,22 @@ src/
 │   └── window/               Window chrome, drag/resize hooks, error boundary
 ├── applications/             One folder per app: manifest.ts + UI
 │   ├── index.ts              Built-in app list (registered at boot)
+│   ├── files/                File Explorer (model.ts = pure state logic)
+│   ├── terminal/             Terminal UI + engine/ (parser, shell, commands)
+│   ├── code-studio/          Monaco editor, tabs, project tree
+│   ├── notes/                Markdown notes stored as files
+│   ├── settings/
 │   ├── welcome/
 │   ├── activity-monitor/
 │   └── calculator/
-├── ui/                       Shared design-system primitives (+ shadcn later)
+├── ui/                       Design system: Button, Input, Switch, Dialog
+│                             (Radix, shadcn-style), FileIcon, Markdown, theme
 └── lib/                      Tiny generic utilities (cn, ids, clamp)
 docs/
 ├── ARCHITECTURE.md           This file
 └── adr/                      Architecture Decision Records
 e2e/                          Playwright specs
+scripts/copy-monaco.mjs       Self-hosts Monaco into public/ (ADR-0004)
 ```
 
 `src/app` (Next.js routes) and `src/applications` (NEXUS apps) are deliberately
@@ -328,6 +341,47 @@ HMR never run it twice.
 | `useDirectory(path)` | Live listing with `loading` / `ready` / `error` states; reloads on any `fs.*` event affecting the directory (including an ancestor being moved or deleted) |
 | `useSystemEvent(type, fn)` | Typed subscription for a component's lifetime |
 | `useRecentEvents(n)` | Rolling list of recent events |
+| `openDocument(path, cb)` | Editor file session: autosave, external-change reload, move/delete tracking (ADR-0005) |
+| `openPath(path, appId?)`, `useAppsForFile(path)` | Open a file in its default app; list "Open With" candidates |
+| `useLaunchRequests(fn)` | Receive new launch args when a single-instance app is launched again |
+| `useAppPreference(key, …)` | Small per-app persistent preferences (`app.<id>.<key>` in kv) |
+| `showContextMenu(e, label, items)` | System context menu (same look and keyboard support everywhere) |
+| `useWindowPortal()` | Portal target for window-scoped dialogs |
+| `useSettings`, `useEffectiveTheme`, `useStorageInfo` | Settings and system information (Settings app) |
+
+### 6.7 Settings and appearance
+
+Settings (`system/settings`) hold identifiers only — theme preference, accent,
+wallpaper, reduce-motion — validated on load and saved on change. Visual
+definitions live in `ui/theme.ts`. The desktop applies them to `<html>`
+(`data-theme`, accent CSS variables, `data-reduce-motion`) before first paint;
+Tailwind's `dark:` variant is bound to `data-theme`, not just the OS setting.
+
+## 6b. Applications (Phase 3)
+
+| App | Highlights | Logic tested in |
+|---|---|---|
+| **Files** | Sidebar places, breadcrumbs, back/forward/up history, grid and sortable list views, kind filter, recursive search, multi-select (click/Ctrl/Shift/keyboard), new/rename/delete/duplicate, cut/copy/paste through the system clipboard, drag-and-drop moves, upload from and download to the real computer, details pane with text/image preview, "Open with", "Open in Terminal", hidden-files toggle; follows its folder when it is moved | `files/model.test.ts`, `clipboard.test.ts` |
+| **Terminal** | `nsh`: quoting, `$VAR`/`$?`, `~`, globs, pipes, `>` `>>` `<`, `;` `&&` `\|\|`; 27 commands (ls, cd, pwd, mkdir, rmdir, touch, cat, rm, mv, cp, echo, grep, wc, head, tail, find, tree, stat, open, history, env, export, clear, help, …); history persisted to `~/.nsh_history`; tab completion; Ctrl+C / L / U | `terminal/engine/engine.test.ts` |
+| **Code Studio** | Self-hosted Monaco (ADR-0004), project tree with context menu, tabs with unsaved markers, autosave toggle, Ctrl+S, unsaved-changes prompt, status bar (line/column, language); workspace (folder, tabs, expanded folders) persisted; tabs follow moved files and become read-only when deleted | `documents.test.ts` |
+| **Notes** | Every `.md`/`.txt` under `~/Documents` is a note; edit / split / preview with GitHub-flavoured Markdown; autosave; search across titles and content; rename by editing the title; opens files from anywhere via Files | `notes/library.test.ts`, `documents.test.ts` |
+| **Settings** | Theme (system/light/dark), accent colour, wallpaper with live miniatures, reduce motion; storage status, usage and quota, erase all data; installed apps with declared permissions; about | `settings.test.ts` |
+
+**Design decisions in this phase**
+
+- *Documents are files.* Notes and Code Studio keep user content in the shared
+  filesystem, never in private storage, so every app — and the terminal — can
+  work with it.
+- *File associations* live in manifests (`fileHandlers` with priorities). Notes
+  wins for `.md`/`.txt`; Code Studio handles any text file; "Open with" lists
+  every capable app. A running single-instance app receives new requests as
+  `app.relaunched` events.
+- *Window-scoped dialogs.* Radix dialogs are portalled into their window and
+  are non-modal at page level, so a prompt in one window blocks only that
+  window, never the whole desktop.
+- *Terminal output protocol.* Commands write styled text; pipes and
+  redirection strip styling; `ls` switches to one-per-line when piped; `clear`
+  writes a form feed that the view interprets, as real terminals do.
 
 ## 7. Rendering & performance strategy
 
@@ -366,6 +420,8 @@ tests get a fresh in-memory IndexedDB per test (`system/testing/memory-db.ts`).
 | IndexedDB unavailable (private mode, quota) | **Done:** in-memory fallback on the same code path; `persistent: false`; "Not saving" warning in the menu bar. |
 | Large files in IndexedDB | **Done:** content stored separately from metadata (ADR-0002). Content search moves to a Web Worker in Phase 5. |
 | Dexie losing transaction context across deep native `await` chains | **Done:** transaction-bound tables passed explicitly (ADR-0002, Decision 4). |
+| Monaco memory with many tabs | Models are disposed when tabs close; Monaco loads only when Code Studio opens. |
+| Slow first boot under heavy CPU load | First boot runs ~20 small seeding transactions. Fine for a single user; e2e allows 15 s and caps parallel workers. Candidate optimisation: seed in one transaction. |
 | Two NEXUS tabs open on the same database | Writes are transactional, so data stays consistent, but each tab's UI won't see the other's changes and the last tab to save wins the workspace session. Planned: `BroadcastChannel` relay of `fs.*` events and a single-active-session lock (Phase 5). |
 | Session changes lost if the page closes mid-debounce | Flush on `pagehide`/tab hide; worst case loses < 400 ms of window movement. |
 | Monaco bundle size & SSR | Lazy loaded per app, client-only, workers via Monaco's ESM worker setup (Phase 3). |
@@ -377,6 +433,6 @@ tests get a fresh in-memory IndexedDB per test (`system/testing/memory-db.ts`).
 
 - [x] **Phase 1 — Desktop foundation** (window manager, runtime skeleton, shell, dock, launcher)
 - [x] **Phase 2 — Core system services** (event bus, storage, virtual filesystem, App SDK, workspace session persistence)
-- [ ] Phase 3 — Files, Terminal, Code Studio, Notes, Settings
+- [x] **Phase 3 — Applications** (Files, Terminal, Code Studio, Notes, Settings)
 - [ ] Phase 4 — Plugins, permissions, marketplace, notifications, multiple workspaces
 - [ ] Phase 5 — Quality hardening

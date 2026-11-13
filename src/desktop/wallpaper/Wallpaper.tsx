@@ -1,9 +1,12 @@
 "use client";
 
+import { useSettings } from "@/system/settings/settings";
+import { useEffectiveTheme } from "@/system/settings/appearance";
+import { WALLPAPER_SPECS } from "@/ui/theme";
+
 /**
- * Default wallpaper: a deep neutral field with two very soft light sources and
- * a faint grain to prevent gradient banding. Wallpaper selection arrives with
- * the Settings app (Phase 3); this component will then read from settings.
+ * Desktop wallpaper: the preset selected in Settings, rendered for the active
+ * theme, with a faint grain to prevent gradient banding.
  */
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E\")";
@@ -14,19 +17,18 @@ interface WallpaperProps {
 }
 
 export function Wallpaper({ onPointerDown, onContextMenu }: WallpaperProps) {
+  const id = useSettings((s) => s.wallpaper);
+  const theme = useEffectiveTheme();
+  const spec = WALLPAPER_SPECS[id];
+
   return (
     <div
       data-desktop-surface
-      className="absolute inset-0 bg-desk"
+      data-wallpaper={id}
+      className="absolute inset-0 transition-[background-color] duration-300"
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
-      style={{
-        backgroundImage: [
-          "radial-gradient(1100px 760px at 18% 8%, rgb(124 147 255 / 0.17), transparent 62%)",
-          "radial-gradient(900px 700px at 88% 96%, rgb(94 196 182 / 0.1), transparent 60%)",
-          "linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 40%)",
-        ].join(","),
-      }}
+      style={{ backgroundColor: spec.base[theme], backgroundImage: spec.layers[theme] }}
     >
       <div
         aria-hidden="true"

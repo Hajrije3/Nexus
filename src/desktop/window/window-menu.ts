@@ -2,7 +2,7 @@ import { Maximize2, Minimize2, Minus, PanelLeft, PanelRight, X } from "lucide-re
 import { windowManager } from "@/system/window-manager/store";
 import { lifecycle } from "@/system/runtime/lifecycle";
 import type { WindowState } from "@/system/window-manager/types";
-import type { MenuItem } from "../shell-store";
+import type { MenuItem } from "@/system/sdk/context-menu";
 
 /** Window-level actions, shared by the title-bar context menu and shortcuts. */
 export function windowMenuItems(win: WindowState): MenuItem[] {

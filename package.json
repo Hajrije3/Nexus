@@ -10,16 +10,24 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "predev": "node scripts/copy-monaco.mjs",
+    "prebuild": "node scripts/copy-monaco.mjs",
+    "postinstall": "node scripts/copy-monaco.mjs"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "clsx": "^2.1.1",
     "dexie": "^4.4.7",
     "fake-indexeddb": "^6.2.8",
     "lucide-react": "^1.72.0",
+    "monaco-editor": "^0.57.0",
     "next": "16.4.6",
+    "radix-ui": "^1.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.7.0",
     "zustand": "^5.1.0"
   },

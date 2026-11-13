@@ -9,7 +9,7 @@ import { TITLE_BAR_HEIGHT } from "@/system/window-manager/constants";
 import type { WindowState } from "@/system/window-manager/types";
 import type { AppIconSpec } from "@/system/runtime/types";
 import { AppIcon } from "@/ui/AppIcon";
-import { useShell } from "../shell-store";
+import { openContextMenu } from "@/system/sdk/context-menu";
 import { startWindowDrag } from "./gestures";
 import { windowMenuItems } from "./window-menu";
 
@@ -21,7 +21,6 @@ interface TitleBarProps {
 }
 
 export function TitleBar({ win, focused, icon, frameRef }: TitleBarProps) {
-  const openContextMenu = useShell((s) => s.openContextMenu);
   const maximized = win.mode === "maximized";
 
   return (

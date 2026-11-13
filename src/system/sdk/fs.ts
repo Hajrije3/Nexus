@@ -11,6 +11,7 @@ import { getServices } from "@/system/services";
 import { systemEvents } from "@/system/events/bus";
 import type { VirtualFileSystem, FsStat } from "@/system/fs/vfs";
 import { dirname, isDescendant, normalize } from "@/system/fs/path";
+import { TextDocumentSession, type DocumentCallbacks } from "@/system/documents";
 
 export type { FsStat } from "@/system/fs/vfs";
 export { FsError, isFsError } from "@/system/fs/errors";
@@ -77,3 +78,13 @@ export function useDirectory(path: string): DirectoryState & { reload(): void } 
   if (loaded.error) return { status: "error", entries: [], error: loaded.error, reload };
   return { status: "ready", entries: loaded.entries, error: null, reload };
 }
+
+/**
+ * Open a text file for editing: autosave, external-change reload, move
+ * tracking and deletion notices. Call `dispose()` when done.
+ */
+export function openDocument(path: string, callbacks: DocumentCallbacks = {}, debounceMs?: number): TextDocumentSession {
+  return new TextDocumentSession(getServices().fs, path, systemEvents, callbacks, debounceMs);
+}
+
+export type { SaveState, DocumentCallbacks } from "@/system/documents";

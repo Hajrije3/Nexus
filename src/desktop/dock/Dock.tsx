@@ -9,6 +9,7 @@ import type { AppManifest } from "@/system/runtime/types";
 import { AppIcon } from "@/ui/AppIcon";
 import { cn } from "@/lib/utils";
 import { useShell } from "../shell-store";
+import { openContextMenu } from "@/system/sdk/context-menu";
 import { quitApp } from "../system-actions";
 
 export function Dock() {
@@ -36,7 +37,7 @@ export function Dock() {
 function DockItem({ app }: { app: AppManifest }) {
   const running = useProcesses((s) => Object.values(s.instances).some((p) => p.appId === app.id));
   const active = useWindowManager((s) => (s.focusedId ? s.windows[s.focusedId]?.appId === app.id : false));
-  const openContextMenu = useShell((s) => s.openContextMenu);
+
 
   return (
     <DockButton

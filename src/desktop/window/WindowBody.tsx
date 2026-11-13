@@ -26,22 +26,26 @@ export const WindowBody = memo(function WindowBody({ windowId, instanceId, appId
   // Created once per window; replaced (fresh chunk load + remount) on "Reopen".
   const [App, setApp] = useState(() => getAppComponent(appId));
   const args = processTable.get(instanceId)?.args ?? EMPTY_ARGS;
-  const ctx = { windowId, instanceId };
+  // The content element doubles as the portal target for window-scoped dialogs.
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
+  const ctx = { windowId, instanceId, appId, portalContainer };
 
   return (
     <WindowContext.Provider value={ctx}>
-      <AppErrorBoundary
-        appName={appName}
-        onClose={() => lifecycle.closeWindow(windowId)}
-        onRestart={() => {
-          evictAppComponent(appId);
-          setApp(() => getAppComponent(appId));
-        }}
-      >
-        <Suspense fallback={<WindowLoading />}>
-          <App windowId={windowId} instanceId={instanceId} args={args} />
-        </Suspense>
-      </AppErrorBoundary>
+      <div ref={setPortalContainer} className="relative h-full" data-window-content>
+        <AppErrorBoundary
+          appName={appName}
+          onClose={() => lifecycle.closeWindow(windowId)}
+          onRestart={() => {
+            evictAppComponent(appId);
+            setApp(() => getAppComponent(appId));
+          }}
+        >
+          <Suspense fallback={<WindowLoading />}>
+            <App windowId={windowId} instanceId={instanceId} args={args} />
+          </Suspense>
+        </AppErrorBoundary>
+      </div>
     </WindowContext.Provider>
   );
 });

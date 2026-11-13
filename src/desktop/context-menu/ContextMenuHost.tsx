@@ -2,21 +2,21 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn, clamp } from "@/lib/utils";
-import { useShell, type ContextMenuState, type MenuItem } from "../shell-store";
+import { closeContextMenu, useContextMenuStore, type ContextMenuState, type MenuItem } from "@/system/sdk/context-menu";
 
 type ActionItem = Exclude<MenuItem, { kind: "separator" }>;
 const isAction = (i: MenuItem): i is ActionItem => i.kind !== "separator";
 
 /** Renders the single active context menu (desktop, title bars, dock, …). */
 export function ContextMenuHost() {
-  const menu = useShell((s) => s.contextMenu);
+  const menu = useContextMenuStore((s) => s.menu);
   if (!menu) return null;
   // Keyed by position so a new menu always starts with fresh state.
   return <ContextMenu key={`${menu.position.x},${menu.position.y}`} menu={menu} />;
 }
 
 function ContextMenu({ menu }: { menu: ContextMenuState }) {
-  const close = useShell((s) => s.closeContextMenu);
+  const close = closeContextMenu;
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(menu.position);
   const [active, setActive] = useState(-1);

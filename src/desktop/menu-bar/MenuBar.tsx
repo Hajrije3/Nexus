@@ -9,6 +9,7 @@ import { NexusMark } from "@/ui/NexusMark";
 import { Kbd, modKeyLabel } from "@/ui/Kbd";
 import { cn } from "@/lib/utils";
 import { useShell } from "../shell-store";
+import { closeContextMenu, openContextMenu, useContextMenuStore } from "@/system/sdk/context-menu";
 import { closeAllWindows, showDesktop } from "../system-actions";
 import { Clock } from "./Clock";
 import { StorageIndicator } from "./StorageIndicator";
@@ -19,8 +20,8 @@ export function MenuBar() {
   const focusedAppId = useWindowManager((s) => (s.focusedId ? s.windows[s.focusedId]?.appId : undefined));
   const focusedApp = useAppManifest(focusedAppId);
   const hasWindows = useWindowManager((s) => s.stack.length > 0);
-  const menuOpen = useShell((s) => s.contextMenu?.label === SYSTEM_MENU);
-  const { openContextMenu, closeContextMenu, toggleLauncher } = useShell.getState();
+  const menuOpen = useContextMenuStore((s) => s.menu?.label === SYSTEM_MENU);
+  const { toggleLauncher } = useShell.getState();
 
   const toggleSystemMenu = (anchor: HTMLElement) => {
     if (menuOpen) return closeContextMenu();

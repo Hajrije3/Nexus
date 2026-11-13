@@ -60,6 +60,9 @@
   color-scheme: light;
 }
 
+/* `dark:` utilities follow the NEXUS theme setting, not just the OS preference. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme inline {
   --color-desk: var(--desk);
   --color-surface: var(--surface);
@@ -216,6 +219,111 @@ body[data-gesture^="resize-"] * {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+/* User preference from Settings, independent of the OS setting. */
+:root[data-reduce-motion="true"] *,
+:root[data-reduce-motion="true"] *::before,
+:root[data-reduce-motion="true"] *::after {
+  animation-duration: 1ms !important;
+  transition-duration: 1ms !important;
+}
+
+/* ───────────────────────── Rendered Markdown ───────────────────────── */
+
+.nx-prose {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.nx-prose > * + * {
+  margin-top: 0.85em;
+}
+.nx-prose h1,
+.nx-prose h2,
+.nx-prose h3,
+.nx-prose h4 {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  margin-top: 1.4em;
+}
+.nx-prose > :first-child {
+  margin-top: 0;
+}
+.nx-prose h1 {
+  font-size: 1.7em;
+}
+.nx-prose h2 {
+  font-size: 1.3em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--line);
+}
+.nx-prose h3 {
+  font-size: 1.1em;
+}
+.nx-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nx-prose ul,
+.nx-prose ol {
+  padding-left: 1.4em;
+}
+.nx-prose ul {
+  list-style: disc;
+}
+.nx-prose ol {
+  list-style: decimal;
+}
+.nx-prose li + li {
+  margin-top: 0.25em;
+}
+.nx-prose li > input[type="checkbox"] {
+  margin-right: 0.4em;
+  accent-color: var(--accent);
+}
+.nx-prose blockquote {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 1em;
+  color: var(--fg-muted);
+}
+.nx-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--active);
+  border-radius: 4px;
+  padding: 0.12em 0.35em;
+}
+.nx-prose pre {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+}
+.nx-prose pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.82em;
+}
+.nx-prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.nx-prose table {
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.nx-prose th,
+.nx-prose td {
+  border: 1px solid var(--line);
+  padding: 0.35em 0.7em;
+}
+.nx-prose th {
+  background: var(--hover);
+  font-weight: 600;
 }
 
 /* Slim scrollbars inside windows. */

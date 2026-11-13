@@ -10,6 +10,8 @@ export interface SystemEventMap {
   /* Application runtime */
   "app.launched": { appId: string; instanceId: string };
   "app.terminated": { appId: string; instanceId: string };
+  /** A single-instance app was launched again; `args` carry the new request. */
+  "app.relaunched": { appId: string; instanceId: string; args: Readonly<Record<string, string | number | boolean>> };
 
   /* Window manager */
   "window.opened": { windowId: string; appId: string; instanceId: string };

@@ -5,10 +5,12 @@ import { EyeOff, Info, Search, X } from "lucide-react";
 import { useWindowManager, windowManager } from "@/system/window-manager/store";
 import { lifecycle } from "@/system/runtime/lifecycle";
 import { Kbd, modKeyLabel } from "@/ui/Kbd";
+import { useAppearanceSync } from "./appearance";
 import { bootSystem } from "./boot";
 import { BootError } from "./BootError";
 import { BootScreen } from "./BootScreen";
 import { useShell } from "./shell-store";
+import { openContextMenu } from "@/system/sdk/context-menu";
 import { useGlobalShortcuts } from "./shortcuts";
 import { closeAllWindows, showDesktop } from "./system-actions";
 import { measureWorkArea } from "./work-area";
@@ -63,8 +65,8 @@ function useWorkAreaSync(): void {
 function DesktopShell() {
   useWorkAreaSync();
   useGlobalShortcuts();
+  useAppearanceSync();
 
-  const openContextMenu = useShell((s) => s.openContextMenu);
   const hasWindows = useWindowManager((s) => s.stack.length > 0);
 
   return (

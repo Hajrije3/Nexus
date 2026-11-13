@@ -83,6 +83,9 @@ export function createLifecycle({ registry, processes, windows, events, now = Da
       const windowId = existing?.windowIds[existing.windowIds.length - 1];
       if (existing && windowId) {
         wm().focus(windowId);
+        if (Object.keys(args).length > 0) {
+          events?.emit("app.relaunched", { appId, instanceId: existing.instanceId, args });
+        }
         return { ok: true, instanceId: existing.instanceId, windowId, reused: true };
       }
     }
