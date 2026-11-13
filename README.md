@@ -46,5 +46,5 @@ First-time e2e setup: `npx playwright install chromium`.
 
 ## Status
 
-Phase 1 (desktop foundation) is complete. See the roadmap in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-roadmap-status).
+Phases 1–2 (desktop foundation, core system services) are complete. See the roadmap in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#10-roadmap-status).

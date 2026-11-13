@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createWindowManagerStore } from "@/system/window-manager/store";
 import { createAppRegistry, RegistryError } from "../registry";
 import { createProcessTable } from "../process-store";
@@ -125,5 +125,41 @@ describe("activateApp (dock click)", () => {
     lc.activateApp("nexus.multi");
     expect(windows.getState().focusedId).toBe(a.windowId);
     expect(windows.getState().windows[a.windowId]?.minimized).toBe(false);
+  });
+});
+
+describe("lifecycle events", () => {
+  it("publishes launch, window and termination events in order", async () => {
+    const { EventBus } = await import("@/system/events/bus");
+    const bus = new EventBus();
+    const seen: string[] = [];
+    bus.onAny((e) => seen.push(e.type));
+    const withEvents = createLifecycle({ registry, processes, windows, events: bus, now: () => 1 });
+
+    const r = withEvents.launchApp("nexus.multi");
+    if (!r.ok) throw new Error("launch failed");
+    withEvents.openWindowFor(r.instanceId);
+    withEvents.terminateInstance(r.instanceId);
+
+    expect(seen).toEqual([
+      "app.launched",
+      "window.opened",
+      "window.opened",
+      "window.closed",
+      "window.closed",
+      "app.terminated",
+    ]);
+  });
+
+  it("emits app.terminated when the last window closes", async () => {
+    const { EventBus } = await import("@/system/events/bus");
+    const bus = new EventBus();
+    const terminated = vi.fn();
+    bus.on("app.terminated", terminated);
+    const withEvents = createLifecycle({ registry, processes, windows, events: bus });
+    const r = withEvents.launchApp("nexus.multi");
+    if (!r.ok) throw new Error("launch failed");
+    withEvents.closeWindow(r.windowId);
+    expect(terminated).toHaveBeenCalledWith({ appId: "nexus.multi", instanceId: r.instanceId }, expect.anything());
   });
 });

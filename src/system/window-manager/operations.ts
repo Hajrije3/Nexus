@@ -68,8 +68,8 @@ export function openWindow(state: WindowManagerState, opts: OpenWindowOptions): 
     instanceId: opts.instanceId,
     title: opts.title,
     bounds: constrainPosition({ ...position, ...size }, state.workArea),
-    mode: "normal",
-    minimized: false,
+    mode: opts.mode && opts.mode !== "normal" && opts.resizable ? opts.mode : "normal",
+    minimized: opts.minimized ?? false,
     minSize: opts.minSize,
     resizable: opts.resizable,
     openedAt: opts.openedAt,
@@ -79,8 +79,25 @@ export function openWindow(state: WindowManagerState, opts: OpenWindowOptions): 
     ...state,
     windows: { ...state.windows, [win.id]: win },
     stack: [...state.stack, win.id],
-    focusedId: win.id,
+    focusedId: win.minimized ? state.focusedId : win.id,
   };
+}
+
+/**
+ * Re-order the stack (e.g. after restoring a session). Ids not in `order`
+ * keep their relative order beneath the listed ones; unknown ids are ignored.
+ * Focus goes to `focusedId` if it is visible, else the topmost visible window.
+ */
+export function restoreStack(
+  state: WindowManagerState,
+  order: readonly WindowId[],
+  focusedId: WindowId | null,
+): WindowManagerState {
+  const listed = order.filter((id, i) => state.windows[id] && order.indexOf(id) === i);
+  const rest = state.stack.filter((id) => !listed.includes(id));
+  const next = { ...state, stack: [...rest, ...listed] };
+  const focusable = focusedId && next.windows[focusedId] && !next.windows[focusedId].minimized;
+  return { ...next, focusedId: focusable ? focusedId : topVisibleWindow(next) };
 }
 
 export function closeWindow(state: WindowManagerState, id: WindowId): WindowManagerState {

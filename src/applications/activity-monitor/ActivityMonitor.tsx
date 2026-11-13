@@ -8,6 +8,7 @@ import { useInstalledApps } from "@/system/runtime/registry";
 import { lifecycle } from "@/system/runtime/lifecycle";
 import { useWindowManager, windowManager } from "@/system/window-manager/store";
 import type { WindowManagerState } from "@/system/window-manager/types";
+import { useRecentEvents, type SystemEvent } from "@/system/sdk/events";
 import { AppIcon } from "@/ui/AppIcon";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,7 @@ export default function ActivityMonitor() {
         {processes.length === 0 ? (
           <Empty>No applications running.</Empty>
         ) : (
-          <table className="w-full text-[12px]">
+          <table className="w-full text-[12px] [&_td]:px-4 [&_th]:px-4">
             <thead>
               <tr className="text-left text-[11px] text-subtle">
                 <Th className="pl-4">Application</Th>
@@ -144,6 +145,8 @@ export default function ActivityMonitor() {
             })}
           </ol>
         )}
+
+        <EventLog />
       </div>
       <footer className="flex h-8 shrink-0 items-center gap-4 border-t border-line px-4 text-[11.5px] text-subtle">
         <span>{processes.length} processes</span>
@@ -153,6 +156,43 @@ export default function ActivityMonitor() {
         </span>
       </footer>
     </div>
+  );
+}
+
+const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+/** One-line summary of an event payload. */
+function summarize(event: SystemEvent): string {
+  const p = event.payload as Record<string, unknown>;
+  if ("from" in p && "to" in p) return `${String(p.from)} → ${String(p.to)}`;
+  if ("path" in p) return String(p.path);
+  if ("appId" in p && p.appId) return String(p.appId);
+  if ("windows" in p) return `${String(p.windows)} windows`;
+  if ("reason" in p) return String(p.reason);
+  return "";
+}
+
+/** Live tail of the system event bus, newest first. */
+function EventLog() {
+  const events = useRecentEvents(40);
+  const newestFirst = [...events].reverse();
+  return (
+    <>
+      <SectionHeader title="System events" count={events.length} hint="newest first" />
+      {newestFirst.length === 0 ? (
+        <Empty>No events yet.</Empty>
+      ) : (
+        <ol className="pb-3 font-mono text-[11px]" aria-label="System events">
+          {newestFirst.map((e) => (
+            <li key={e.seq} className="flex items-center gap-3 border-t border-line px-4 py-1" data-event-type={e.type}>
+              <span className="w-16 shrink-0 tabular-nums text-subtle">{timeFmt.format(e.timestamp)}</span>
+              <span className="w-36 shrink-0 text-accent">{e.type}</span>
+              <span className="min-w-0 flex-1 truncate text-muted">{summarize(e)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
   );
 }
 

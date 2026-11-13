@@ -24,6 +24,7 @@ export interface WindowManagerActions {
   setWorkArea(rect: Rect): void;
   setSnapPreview(zone: SnapZone | null): void;
   cycleFocus(direction: 1 | -1): void;
+  restoreStack(order: readonly WindowId[], focusedId: WindowId | null): void;
 }
 
 export type WindowManagerStore = WindowManagerState & WindowManagerActions;
@@ -52,6 +53,7 @@ export function createWindowManagerStore(workArea: Rect = INITIAL_WORK_AREA) {
       setWorkArea: apply(ops.setWorkArea),
       setSnapPreview: apply(ops.setSnapPreview),
       cycleFocus: apply(ops.cycleFocus),
+      restoreStack: apply(ops.restoreStack),
     };
   });
 }

@@ -21,8 +21,8 @@ moves.
 │   Pure presentation of system state + translation of user input.      │
 ├──────────────────────────────────────────────────────────────────────┤
 │ System Services         src/system/*                                  │
-│   window-manager · runtime (registry + processes) · events (P2)       │
-│   fs (P2) · storage (P2) · settings (P3) · permissions (P4)           │
+│   window-manager · runtime (registry + processes) · events · storage  │
+│   fs · workspace · sdk · settings (P3) · permissions (P4)             │
 │   Framework-agnostic TypeScript. No React imports in core logic.      │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Platform                                                              │
@@ -31,7 +31,7 @@ moves.
 ```
 
 **Dependency rule:** arrows only point down. Applications may import from
-`system/*/public` APIs and `ui/*`; they never import from `desktop/*` or from
+the App SDK (`system/sdk/*`) and `ui/*`; they never import from `desktop/*` or from
 another application. System services never import from `desktop/*` or
 `applications/*`. This is enforced by convention now and will be enforced with
 an ESLint `no-restricted-imports` rule once more applications exist.
@@ -55,11 +55,30 @@ src/
 │   │   ├── process-store.ts  Running instances (the "process table")
 │   │   ├── lifecycle.ts      launch / close / focus orchestration
 │   │   └── __tests__/
-│   ├── events/               Typed event bus                       (Phase 2)
-│   ├── storage/              Dexie database + migrations           (Phase 2)
-│   └── fs/                   Virtual filesystem service            (Phase 2)
+│   ├── events/
+│   │   ├── types.ts          SystemEventMap — the registry of every event
+│   │   ├── bus.ts            Typed synchronous EventBus + systemEvents
+│   │   └── bridges.ts        Publish events for pure stores (window focus)
+│   ├── storage/
+│   │   ├── db.ts             Dexie schema (nodes, contents, kv) + versions
+│   │   ├── open.ts           Open IndexedDB, in-memory fallback, estimates
+│   │   └── kv.ts             Validated key-value store
+│   ├── fs/
+│   │   ├── path.ts           POSIX path utilities (normalize, resolve, ~)
+│   │   ├── errors.ts         FsError with ENOENT/EEXIST/… codes
+│   │   ├── mime.ts           Extension → MIME type
+│   │   ├── vfs.ts            VirtualFileSystem service
+│   │   └── seed.ts           Standard layout + one-time starter files
+│   ├── workspace/
+│   │   ├── session.ts        Capture / validate / restore session snapshots
+│   │   └── persistence.ts    Debounced autosave
+│   ├── sdk/                  App SDK: useWindow, useFileSystem, useDirectory,
+│   │                         useSystemEvent, useRecentEvents
+│   ├── services.ts           Booted-service registry + system status store
+│   └── testing/              Test helpers (in-memory database)
 ├── desktop/                  Desktop environment (React)
-│   ├── Desktop.tsx           Root shell composition
+│   ├── Desktop.tsx           Boot gating + root shell composition
+│   ├── boot.ts               Boot sequence (see §6)
 │   ├── menu-bar/             Menu bar + clock
 │   ├── dock/                 Dock with running indicators
 │   ├── launcher/             Spotlight-style command launcher
@@ -152,7 +171,7 @@ Every transition — `openWindow`, `focusWindow`, `moveWindow`, `resizeWindow`,
 `operations.ts`. The Zustand store just binds them. Consequences:
 
 - Window behaviour is fully unit-testable without a DOM.
-- Workspace persistence (Phase 4) is "serialise `windows` + `stack`".
+- Workspace persistence is "serialise `windows` + `stack`" (see §6.4).
 - An undo stack or multi-workspace support is a state-shape change, not a
   rewrite.
 
@@ -226,8 +245,91 @@ and never takes down the desktop.
   This is deliberate for now; in Phase 4 the permission manager will expose
   these reads through a permission-checked SDK API and the direct imports
   will be removed.
+- Lifecycle changes are published on the event bus: `app.launched`,
+  `window.opened`, `window.closed`, `app.terminated`.
 
-## 6. Rendering & performance strategy
+## 6. Core system services (Phase 2)
+
+### 6.1 Event bus — ADR-0003
+
+`systemEvents` is a typed, synchronous bus. `SystemEventMap` lists every
+event; emitting anything else is a compile error. Listener failures are
+isolated. The last 200 events are retained (Activity Monitor shows them).
+
+| Domain | Events |
+|---|---|
+| Runtime | `app.launched`, `app.terminated` |
+| Windows | `window.opened`, `window.closed`, `window.focused` |
+| Filesystem | `fs.created`, `fs.modified`, `fs.deleted`, `fs.moved`, `file.opened` |
+| System | `workspace.restored`, `storage.degraded`, `theme.changed`*, `notification.received`* |
+
+\* declared now, emitted from Phase 3/4.
+
+### 6.2 Storage
+
+One Dexie database, `nexus`, version 1:
+
+| Table | Key | Indexes | Holds |
+|---|---|---|---|
+| `nodes` | `id` | `parentId`, `&[parentId+name]`, `name` | File/directory metadata |
+| `contents` | `id` | — | File bodies (`string \| ArrayBuffer`) |
+| `kv` | `key` | — | System state (session, seed version, settings) |
+
+If IndexedDB can't be opened, `openStorage()` falls back to an in-memory
+implementation with the same schema and code path, reports
+`persistent: false`, and the menu bar shows a **Not saving** warning. The
+browser is asked (best effort) to make storage persistent so it isn't evicted.
+
+### 6.3 Virtual filesystem — ADR-0002
+
+`VirtualFileSystem` offers `stat`, `exists`, `readdir`, `readFile`/`readText`,
+`writeFile`, `mkdir` (incl. `-p`), `touch`, `rename` (move), `copy`
+(recursive), `remove` (incl. recursive), `walk`, `search` and `usage`.
+
+- Tree of nodes linked by `parentId`; rename/move is O(1).
+- Every mutation is one transaction; events are emitted after commit.
+- Errors are `FsError`s with POSIX codes (`ENOENT`, `EEXIST`, `ENOTDIR`,
+  `EISDIR`, `ENOTEMPTY`, `EINVAL`, `EPERM`) so the terminal can print familiar
+  messages.
+- `/`, `/home`, `/home/user`, `/system`, `/applications` and `/settings` are
+  protected: their contents can change, but they can't be removed or renamed.
+- Standard directories are recreated on every boot if missing; starter files
+  are written once (versioned), so files the user deletes stay deleted.
+
+### 6.4 Workspace persistence
+
+`captureSession` serialises running instances (app id + launch args) and their
+windows (title, floating bounds, mode, minimised, z-position, focus) into a
+versioned snapshot stored under `kv["workspace.session"]`. `parseSession`
+validates stored data field by field — malformed entries are dropped, not
+trusted. `restoreSession` re-creates instances through
+`lifecycle.restoreInstance`, then `restoreStack` re-applies z-order and focus.
+Apps that are no longer installed are skipped and reported.
+
+Autosave subscribes to the window manager and process table, ignores transient
+state (snap preview), debounces writes (400 ms), skips unchanged snapshots and
+flushes on `pagehide` / tab hide.
+
+### 6.5 Boot sequence (`desktop/boot.ts`)
+
+1. Register built-in apps. 2. Measure the work area. 3. Open storage.
+4. Mount and seed the filesystem. 5. Install services and event bridges.
+6. Restore the saved session — or launch Welcome on a first boot.
+7. Start autosave. The desktop shows the boot screen until this resolves and a
+dedicated error screen if it fails. Boot is memoised, so React StrictMode and
+HMR never run it twice.
+
+### 6.6 App SDK (`system/sdk`)
+
+| Hook | Purpose |
+|---|---|
+| `useWindow()` | Host window: title, close, minimise, maximise, focus state |
+| `useFileSystem()` | The shared `VirtualFileSystem` |
+| `useDirectory(path)` | Live listing with `loading` / `ready` / `error` states; reloads on any `fs.*` event affecting the directory (including an ancestor being moved or deleted) |
+| `useSystemEvent(type, fn)` | Typed subscription for a component's lifetime |
+| `useRecentEvents(n)` | Rolling list of recent events |
+
+## 7. Rendering & performance strategy
 
 - The whole desktop is client-only (`next/dynamic` with `ssr: false` inside a
   client boundary). There is no meaningful server render of a desktop, and
@@ -239,35 +341,42 @@ and never takes down the desktop.
 - React Compiler is enabled for automatic memoisation; hot paths still avoid
   creating per-render objects in selectors (`useShallow` where needed).
 
-## 7. Testing strategy
+## 8. Testing strategy
 
 | Layer | Tool | What is covered |
 |---|---|---|
-| Window manager geometry & operations | Vitest (Node) | Clamping, resize anchoring, snapping, cascade, focus/z-order, minimise/close refocus, immutability |
-| Runtime | Vitest (Node) | Registry validation, single/multi-instance launch, instance termination, dock activation semantics |
-| Pure app logic | Vitest | Launcher ranking, calculator engine |
-| Desktop end-to-end | Playwright (Chromium, production build) | Real pointer drag/resize, snapping with preview, maximise/restore, minimise/restore via dock, z-order, shortcuts, launcher, app interaction |
+| Window manager geometry & operations | Vitest (Node) | Clamping, resize anchoring, snapping, cascade, focus/z-order, minimise/close refocus, immutability, stack restore |
+| Runtime | Vitest (Node) | Registry validation, single/multi-instance launch, instance termination, dock activation semantics, lifecycle event order |
+| Event bus | Vitest | Typed delivery, unsubscribe/once, listener isolation, dispatch snapshotting, bounded history |
+| Storage & filesystem | Vitest + fake-indexeddb | Every VFS operation and error code, atomicity, binary data, search ranking, seeding idempotency, in-memory fallback |
+| Workspace | Vitest | Snapshot round-trip, validation of corrupt data, missing apps, debounced autosave |
+| Pure app logic | Vitest | Launcher ranking, calculator engine, directory-change matching |
+| Desktop end-to-end | Playwright (Chromium, production build) | Pointer drag/resize, snapping, maximise/restore, dock, z-order, shortcuts, launcher, apps, **session restore across real reloads**, event log |
 
-Services are built as factories (`createLifecycle({ registry, processes, windows })`)
-so each test gets isolated instances instead of sharing module singletons.
+Services are built as factories (`createLifecycle({ registry, processes, windows })`,
+`new VirtualFileSystem(db)`) so each test gets isolated instances; filesystem
+tests get a fresh in-memory IndexedDB per test (`system/testing/memory-db.ts`).
 
-## 8. Technical risks
+## 9. Technical risks
 
 | Risk | Mitigation |
 |---|---|
 | Pointer-move re-render storms | Imperative gesture updates (ADR-0001). |
 | Iframes/Monaco swallowing pointer events mid-drag | Full-screen transparent capture layer while a gesture is active; pointer capture on handles. |
-| IndexedDB unavailable (private mode, quota) | Storage layer exposes an explicit `available` state; in-memory fallback with a visible warning (Phase 2). |
-| Large files in IndexedDB | Store content blobs separately from metadata; stream into workers for search (Phase 2/5). |
+| IndexedDB unavailable (private mode, quota) | **Done:** in-memory fallback on the same code path; `persistent: false`; "Not saving" warning in the menu bar. |
+| Large files in IndexedDB | **Done:** content stored separately from metadata (ADR-0002). Content search moves to a Web Worker in Phase 5. |
+| Dexie losing transaction context across deep native `await` chains | **Done:** transaction-bound tables passed explicitly (ADR-0002, Decision 4). |
+| Two NEXUS tabs open on the same database | Writes are transactional, so data stays consistent, but each tab's UI won't see the other's changes and the last tab to save wins the workspace session. Planned: `BroadcastChannel` relay of `fs.*` events and a single-active-session lock (Phase 5). |
+| Session changes lost if the page closes mid-debounce | Flush on `pagehide`/tab hide; worst case loses < 400 ms of window movement. |
 | Monaco bundle size & SSR | Lazy loaded per app, client-only, workers via Monaco's ESM worker setup (Phase 3). |
 | Plugin code executing with full privileges | Phase 4 plugins run in sandboxed iframes / workers with a message-based SDK and manifest-declared permissions — never `eval` in the main realm. |
 | Next.js 16 conventions differ from older docs (Cache Components, React Compiler enabled) | Consult `node_modules/next/dist/docs` before using new framework APIs. |
 | Browser shortcuts colliding with OS shortcuts | Use `Ctrl/⌘+K` for the launcher, `Alt`-based window shortcuts; never rely on `⌘W`/`⌘T`/`⌘N`. |
 
-## 9. Roadmap status
+## 10. Roadmap status
 
 - [x] **Phase 1 — Desktop foundation** (window manager, runtime skeleton, shell, dock, launcher)
-- [ ] Phase 2 — Event bus, storage, virtual filesystem
+- [x] **Phase 2 — Core system services** (event bus, storage, virtual filesystem, App SDK, workspace session persistence)
 - [ ] Phase 3 — Files, Terminal, Code Studio, Notes, Settings
-- [ ] Phase 4 — Plugins, permissions, workspace persistence, marketplace, notifications
+- [ ] Phase 4 — Plugins, permissions, marketplace, notifications, multiple workspaces
 - [ ] Phase 5 — Quality hardening

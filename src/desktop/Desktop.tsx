@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { EyeOff, Info, Search, X } from "lucide-react";
 import { useWindowManager, windowManager } from "@/system/window-manager/store";
 import { lifecycle } from "@/system/runtime/lifecycle";
-import { DOCK_RESERVED_HEIGHT, MENU_BAR_HEIGHT } from "@/system/window-manager/constants";
 import { Kbd, modKeyLabel } from "@/ui/Kbd";
 import { bootSystem } from "./boot";
+import { BootError } from "./BootError";
+import { BootScreen } from "./BootScreen";
 import { useShell } from "./shell-store";
 import { useGlobalShortcuts } from "./shortcuts";
 import { closeAllWindows, showDesktop } from "./system-actions";
+import { measureWorkArea } from "./work-area";
 import { ContextMenuHost } from "./context-menu/ContextMenuHost";
 import { Dock } from "./dock/Dock";
 import { Launcher } from "./launcher/Launcher";
@@ -18,7 +20,25 @@ import { Wallpaper } from "./wallpaper/Wallpaper";
 import { SnapPreview } from "./window/SnapPreview";
 import { WindowLayer } from "./window/WindowLayer";
 
-bootSystem();
+type BootState = { status: "booting" } | { status: "ready" } | { status: "failed"; error: Error };
+
+export function Desktop() {
+  const [boot, setBoot] = useState<BootState>({ status: "booting" });
+
+  useEffect(() => {
+    bootSystem().then(
+      () => setBoot({ status: "ready" }),
+      (error: unknown) => {
+        console.error("[nexus] boot failed", error);
+        setBoot({ status: "failed", error: error instanceof Error ? error : new Error(String(error)) });
+      },
+    );
+  }, []);
+
+  if (boot.status === "booting") return <BootScreen />;
+  if (boot.status === "failed") return <BootError error={boot.error} />;
+  return <DesktopShell />;
+}
 
 /** Keep the window manager's work area in sync with the viewport. */
 function useWorkAreaSync(): void {
@@ -26,12 +46,7 @@ function useWorkAreaSync(): void {
     let raf = 0;
     const sync = () => {
       raf = 0;
-      windowManager.getState().setWorkArea({
-        x: 0,
-        y: MENU_BAR_HEIGHT,
-        width: window.innerWidth,
-        height: Math.max(200, window.innerHeight - MENU_BAR_HEIGHT - DOCK_RESERVED_HEIGHT),
-      });
+      windowManager.getState().setWorkArea(measureWorkArea());
     };
     sync();
     const onResize = () => {
@@ -45,15 +60,9 @@ function useWorkAreaSync(): void {
   }, []);
 }
 
-export function Desktop() {
+function DesktopShell() {
   useWorkAreaSync();
   useGlobalShortcuts();
-
-  // First boot experience. Welcome is single-instance, so StrictMode's double
-  // effect invocation focuses the same window instead of opening two.
-  useEffect(() => {
-    if (windowManager.getState().stack.length === 0) lifecycle.launchApp("nexus.welcome");
-  }, []);
 
   const openContextMenu = useShell((s) => s.openContextMenu);
   const hasWindows = useWindowManager((s) => s.stack.length > 0);

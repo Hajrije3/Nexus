@@ -55,5 +55,8 @@ export interface OpenWindowOptions {
   resizable: boolean;
   /** Explicit position; otherwise the window manager cascades. */
   position?: Point;
+  /** Initial mode/minimised state (used when restoring a saved session). */
+  mode?: WindowMode;
+  minimized?: boolean;
   openedAt: number;
 }

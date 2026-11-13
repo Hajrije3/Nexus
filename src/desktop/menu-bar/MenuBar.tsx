@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useShell } from "../shell-store";
 import { closeAllWindows, showDesktop } from "../system-actions";
 import { Clock } from "./Clock";
+import { StorageIndicator } from "./StorageIndicator";
 
 const SYSTEM_MENU = "System";
 
@@ -61,6 +62,7 @@ export function MenuBar() {
       </div>
 
       <div className="flex items-center gap-1">
+        <StorageIndicator />
         <button
           type="button"
           onClick={toggleLauncher}
